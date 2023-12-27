@@ -12,7 +12,7 @@ const Navigation = () => {
       screenOptions={{headerShown: false}}
     >
       <Stack.Screen name="Login" component={LoginScreen}/>
-      <Stack.Screen name="BottomTabs" component={BottomTabs}/>
+      <Stack.Screen name="Main" component={BottomTabs}/>
     </Stack.Navigator>
   )
 }

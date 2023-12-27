@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   StatusBar,
   StyleSheet,
@@ -9,12 +9,26 @@ import {
 } from 'react-native'
 import { Entypo, MaterialIcons, AntDesign } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useNavigation } from '@react-navigation/native'
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri, useAuthRequest } from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
+
+// Endpoint
+const discovery = {
+  authorizationEndpoint: 'https://accounts.spotify.com/authorize',
+  tokenEndpoint: 'https://accounts.spotify.com/api/token',
+};
+
 
 const LoginScreen = () => {
+  const navigation = useNavigation()
 
-  async function authenticate () {
-    const config = {
-      issuer: "https://accounts.spotify.com",
+  const [request, response, promptAsync] = useAuthRequest(
+    {
+      issuer:"https://accounts.spotify.com",
       clientId: "d023a210c5da4c01bbf9ae033ed36587",
       scopes: [
         "user-read-email",
@@ -25,9 +39,57 @@ const LoginScreen = () => {
         "playlist-read-collaborative",
         "playlist-modify-public" // or "playlist-modify-private"
       ],
-      redirectUrl: "exp://192.168.68.109:8081/--/spotify-auth-callback"
+      redirectUri:'exp://192.168.68.109:8081',
+    },
+    discovery
+  )
+
+  useEffect(() => {
+
+    console.log("request:", request)
+     if (response?.type === 'success') {
+      const { params } = response;
+      const expirationDate = Date.now() + 1000;
+      
+      AsyncStorage.setItem("token", params.code);
+      AsyncStorage.setItem("expirationDate", expirationDate.toString());
+
+      // Navigate to your desired screen (assuming `navigation` is available in your scope)
+      navigation.navigate("Main");
+    } else if (response?.type === 'error') {
+      console.error('Authentication error:', response.error);
     }
-  }
+  }, [response]);
+
+  useEffect(() => {
+    
+    const checkTokenValidity = async () => {
+      const token = await AsyncStorage.getItem("token")
+
+      console.log(token)
+      const expirationDate = await AsyncStorage.getItem("expirationDate")
+      console.log(expirationDate)
+
+      if (token && expirationDate) {
+        const currentTime = Date.now()
+        console.log("currentTime ", currentTime)
+        console.log("expirationDate: ", expirationDate)
+        if (currentTime < parseInt(expirationDate)) {
+          navigation.navigate("Main")
+        } else {
+          AsyncStorage.removeItem("token")
+          AsyncStorage.removeItem("expirationDate")
+        }
+      }
+    }
+
+    checkTokenValidity()
+  }, [])
+
+  
+
+   
+  
 
   return (
     <LinearGradient colors={["#040306", "#131624"]} style={{ flex: 1 }}>
@@ -49,7 +111,9 @@ const LoginScreen = () => {
         }}>Milions of Songs Free on Spotify</Text>
         <View style={{ height: 80 }} />
         <Pressable
-          onPress={authenticate}
+          onPress={() => {
+            promptAsync();
+          }}
           style={{
             backgroundColor: "#1DB954",
             width: 300,
