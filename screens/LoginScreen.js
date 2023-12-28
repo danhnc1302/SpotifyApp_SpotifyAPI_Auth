@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri, useAuthRequest } from 'expo-auth-session';
+import { ResponseType, makeRedirectUri, useAuthRequest } from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,14 +22,10 @@ const discovery = {
   tokenEndpoint: 'https://accounts.spotify.com/api/token',
 };
 
-
-const LoginScreen = () => {
-  const navigation = useNavigation()
-
-  const [request, response, promptAsync] = useAuthRequest(
-    {
-      issuer:"https://accounts.spotify.com",
+const AuthConfig = {
+  issuer: "https://accounts.spotify.com",
       clientId: "d023a210c5da4c01bbf9ae033ed36587",
+      clientSecret: "1c3182e7bfe2497cab2f6aed00ccd9a6",
       scopes: [
         "user-read-email",
         "user-library-read",
@@ -39,19 +35,52 @@ const LoginScreen = () => {
         "playlist-read-collaborative",
         "playlist-modify-public" // or "playlist-modify-private"
       ],
-      redirectUri:'exp://192.168.68.109:8081',
-    },
+      redirectUri: 'exp://192.168.68.109:8081',
+      responseType: ResponseType.Code,
+      
+}
+
+
+const LoginScreen = () => {
+  const navigation = useNavigation()
+
+  const [request, response, promptAsync] = useAuthRequest(
+    AuthConfig,
     discovery
   )
 
   useEffect(() => {
 
-    console.log("request:", request)
-     if (response?.type === 'success') {
+    const getAccessToken = async (code, codeVerifier) => {
+      try {
+        const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `grant_type=authorization_code&code=${code}&redirect_uri=${AuthConfig.redirectUri}&client_id=${AuthConfig.clientId}&client_secret=${AuthConfig.clientSecret}&code_verifier=${codeVerifier}`,
+        });
+        const tokenData = await tokenResponse.json();
+        console.log("tokenData: ", tokenData)
+        const accessToken = tokenData.access_token;
+        
+        // Lưu `accessToken` vào AsyncStorage hoặc nơi khác để sử dụng sau này
+        AsyncStorage.setItem("accessToken", accessToken);
+    
+        return accessToken;
+      } catch (error) {
+        console.error('Token retrieval error:', error);
+      }
+    };
+    
+
+    if (response?.type === 'success') {
+      console.log("request",request)
+      console.log("response",response)
       const { params } = response;
-      const expirationDate = Date.now() + 1000;
-      
-      AsyncStorage.setItem("token", params.code);
+      const expirationDate = Date.now() + 3600 * 1000;
+
+      getAccessToken(params.code, request.codeVerifier)
       AsyncStorage.setItem("expirationDate", expirationDate.toString());
 
       // Navigate to your desired screen (assuming `navigation` is available in your scope)
@@ -62,18 +91,13 @@ const LoginScreen = () => {
   }, [response]);
 
   useEffect(() => {
-    
+
     const checkTokenValidity = async () => {
       const token = await AsyncStorage.getItem("token")
-
-      console.log(token)
       const expirationDate = await AsyncStorage.getItem("expirationDate")
-      console.log(expirationDate)
-
+      console.log("Token: ", token)
       if (token && expirationDate) {
         const currentTime = Date.now()
-        console.log("currentTime ", currentTime)
-        console.log("expirationDate: ", expirationDate)
         if (currentTime < parseInt(expirationDate)) {
           navigation.navigate("Main")
         } else {
@@ -85,11 +109,6 @@ const LoginScreen = () => {
 
     checkTokenValidity()
   }, [])
-
-  
-
-   
-  
 
   return (
     <LinearGradient colors={["#040306", "#131624"]} style={{ flex: 1 }}>
