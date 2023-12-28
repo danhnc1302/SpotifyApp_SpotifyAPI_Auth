@@ -288,7 +288,7 @@ const HomeScreen = () => {
             fontSize: 19,
             fontWeight: "bold",
             marginHorizontal: 10,
-            marginTop: 10,
+            marginTop: 10, 
           }}
         >
           Your Top Artists
